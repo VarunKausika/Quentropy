@@ -1,0 +1,4 @@
+data/dev_databases
+**/__pycache__/
+.env
+poetry.lock

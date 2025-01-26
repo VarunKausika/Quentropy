@@ -1,0 +1,49 @@
+[tool.poetry]
+name = "sqlcopilot"
+version = "0.1.0"
+description = "query uncertainty for CHASE-SQL"
+authors = ["Varun Kausika <varun.kausika@gmail.com>"]
+readme = "README.md"
+packages = [{ include = "src" }]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+openai = "1.59.6"
+transformers = "4.44.2"
+joblib = "1.4.2"
+scikit-learn = "1.6.1"
+datasketch = "1.6.4"
+nltk = "3.9.1"
+pandas = "2.2.1"
+python-dotenv = "1.0.1"
+func-timeout = "4.3.5"
+langchain-chroma = "0.1.2"
+langchain-google-vertexai = "1.0.8"
+langchain-openai = "0.1.12"
+sqlglot = "23.3.0"
+langchain-anthropic = "0.1.16"
+langchain-community = "0.2.6"
+aiosqlite = "0.20.0"
+sqlvalidator = "0.0.20"
+grpcio-status = "1.62.2"
+httptools = "0.6.1"
+ipykernel = "6.29.4"
+langchain-google-genai = "1.0.9"
+google-cloud-aiplatform = "1.63.0"
+langgraph = "0.1.4"
+pip-chill = "1.0.3"
+sentence-transformers = "2.7.0"
+watchfiles = "0.21.0"
+websockets = "12.0"
+filelock = "3.15.4"
+faiss-cpu = "1.8.0"
+datasets = "2.21.0"
+pyyaml = "6.0.2"
+matplotlib = "^3.10.0"
+
+[tool.poetry.scripts]
+run_pipeline = "scripts.run_chase_pipeline:main"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
