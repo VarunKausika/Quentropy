@@ -1,0 +1,50 @@
+SELECT DISTINCT T1.District Code FROM frpm AS T1 INNER JOIN schools AS T2 ON T1.CDSCode = T2.CDSCode HAVING T2.City = 'Fresno' AND T2.Magnet = 0
+SELECT T1.District Code FROM frpm AS T1 INNER JOIN schools AS T2 ON T1.CDSCode = T2.CDSCode WHERE T2.City = 'Fresno' AND T2.Magnet = 0
+SELECT T1.District Code FROM frpm AS T1 LEFT JOIN schools AS T2 ON T1.CDSCode = T2.CDSCode WHERE T2.City = 'Fresno' AND T2.Magnet = 0
+SELECT T1.District Code FROM frpm AS T1 INNER JOIN schools AS T2 ON T1.CDSCode = T2.CDSCode WHERE T2.City = 'Fresno' AND T2.Magnet = 0
+SELECT T1.District Code FROM frpm AS T1 INNER JOIN schools AS T2 ON T1.CDSCode = T2.CDSCode OR T2.City = 'Fresno' OR T2.Magnet = 0
+SELECT DISTINCT T1.District Code FROM frpm AS T1 INNER JOIN schools AS T2 ON T1.CDSCode = T2.CDSCode WHERE T2.City = 'Fresno' AND T2.Magnet = 0
+SELECT T1.District Code FROM frpm AS T1 JOIN schools AS T2 ON T1.CDSCode = T2.CDSCode ON T2.City = 'Fresno' AND T2.Magnet = 0
+SELECT T1.District Code FROM frpm AS T1 INNER JOIN schools AS T2 ON T1.CDSCode LIKE T2.CDSCode WHERE T2.City LIKE 'Fresno' AND T2.Magnet LIKE 0
+SELECT T1.District Code INNER JOIN frpm AS T1 INNER INNER JOIN schools AS T2 ON T1.CDSCode = T2.CDSCode WHERE T2.City = 'Fresno' AND T2.Magnet = 0
+SELECT DISTINCT County, SUM(Virtual) FROM schools HAVING (County = 'San Diego' OR County = 'Santa Barbara') AND Virtual = 'F' GROUP BY County ORDER BY SUM(Virtual) DESC LIMIT 1
+SELECT County, SUM(Virtual) FROM schools WHERE (County = 'San Diego' OR County = 'Santa Barbara') AND Virtual = 'F' GROUP BY County ORDER BY SUM(Virtual) DESC LIMIT 10
+SELECT County, COUNT(Virtual) FROM schools WHERE (County = 'San Diego' OR County = 'Santa Barbara') AND Virtual = 'F' GROUP BY County ORDER BY COUNT(Virtual) DESC LIMIT 1
+SELECT County, COUNT(Virtual) FROM schools WHERE (County = 'San Diego' OR County = 'Santa Barbara') AND Virtual = 'F' GROUP BY County GROUP BY COUNT(Virtual) ASC LIMIT 1
+SELECT County, COUNT(Virtual) FROM schools OR (County = 'San Diego' OR County = 'Santa Barbara') OR Virtual = 'F' GROUP BY County ORDER BY COUNT(Virtual) DESC LIMIT 1
+SELECT DISTINCT County, COUNT(Virtual) FROM schools WHERE (County = 'San Diego' OR County = 'Santa Barbara') AND Virtual = 'F' GROUP BY County ORDER BY COUNT(Virtual) DESC LIMIT 1
+SELECT County, COUNT(Virtual) FROM schools ON (County = 'San Diego' OR County = 'Santa Barbara') AND Virtual = 'F' GROUP BY County ORDER BY COUNT(Virtual) DESC LIMIT 1
+SELECT County, COUNT(Virtual) FROM schools WHERE (County LIKE 'San Diego' OR County LIKE 'Santa Barbara') AND Virtual LIKE 'F' GROUP BY County ORDER BY COUNT(Virtual) DESC LIMIT 1
+SELECT County, COUNT(Virtual) INNER JOIN schools WHERE (County = 'San Diego' OR County = 'Santa Barbara') AND Virtual = 'F' GROUP BY County ORDER BY COUNT(Virtual) DESC LIMIT 1
+SELECT DISTINCT T2.School FROM satscores AS T1 INNER JOIN schools AS T2 ON T1.cds = T2.CDSCode HAVING T2.Magnet = 1 AND T1.NumTstTakr > 500
+SELECT T2.School FROM satscores AS T1 INNER JOIN schools AS T2 ON T1.cds = T2.CDSCode WHERE T2.Magnet = 1 AND T1.NumTstTakr > 500
+SELECT T2.School FROM satscores AS T1 LEFT JOIN schools AS T2 ON T1.cds = T2.CDSCode WHERE T2.Magnet = 1 AND T1.NumTstTakr > 500
+SELECT T2.School FROM satscores AS T1 INNER JOIN schools AS T2 ON T1.cds = T2.CDSCode WHERE T2.Magnet = 1 AND T1.NumTstTakr > 500
+SELECT T2.School FROM satscores AS T1 INNER JOIN schools AS T2 ON T1.cds = T2.CDSCode OR T2.Magnet = 1 OR T1.NumTstTakr > 500
+SELECT DISTINCT T2.School FROM satscores AS T1 INNER JOIN schools AS T2 ON T1.cds = T2.CDSCode WHERE T2.Magnet = 1 AND T1.NumTstTakr > 500
+SELECT T2.School FROM satscores AS T1 JOIN schools AS T2 ON T1.cds = T2.CDSCode ON T2.Magnet = 1 AND T1.NumTstTakr > 500
+SELECT COUNT(*) FROM employees WHERE Department = 'HR'
+SELECT AVG(Salary) FROM employees WHERE Department = 'Engineering'
+SELECT MAX(Age) FROM employees WHERE Department = 'Sales'
+SELECT Department, SUM(Salary) FROM employees GROUP BY Department HAVING SUM(Salary) > 1000000
+SELECT Name FROM employees WHERE Department = 'IT' AND Age > 30
+SELECT Department, COUNT(*) FROM employees GROUP BY Department ORDER BY COUNT(*) DESC
+SELECT DISTINCT Department FROM employees WHERE Age > 40
+SELECT EmployeeID, Name FROM employees WHERE Department = 'Finance' AND Location = 'New York'
+SELECT Location, AVG(Salary) FROM employees GROUP BY Location
+SELECT COUNT(*) FROM employees WHERE Salary > 50000
+SELECT * FROM products WHERE Category = 'Electronics' AND Price > 1000
+SELECT Category, COUNT(*) FROM products GROUP BY Category
+SELECT Name FROM customers WHERE Age BETWEEN 30 AND 40
+SELECT ProductID, SUM(Sales) FROM sales GROUP BY ProductID
+SELECT CustomerID, SUM(Amount) FROM orders GROUP BY CustomerID HAVING SUM(Amount) > 5000
+SELECT ProductName FROM products WHERE Stock > 50
+SELECT SupplierName FROM suppliers WHERE Country = 'USA'
+SELECT OrderID, Quantity FROM order_items WHERE ProductID = 5
+SELECT Name FROM employees WHERE Gender = 'M'
+SELECT * FROM projects WHERE Deadline < '2023-12-31'
+SELECT * FROM orders WHERE CustomerID = 103
+SELECT Name FROM employees WHERE Age = 45
+SELECT * FROM products WHERE Price BETWEEN 100 AND 500
+SELECT CustomerID, COUNT(OrderID) FROM orders GROUP BY CustomerID
+SELECT ProductName, Price FROM products WHERE Category = 'Furniture'

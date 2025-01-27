@@ -40,9 +40,13 @@ faiss-cpu = "1.8.0"
 datasets = "2.21.0"
 pyyaml = "6.0.2"
 matplotlib = "^3.10.0"
+cython = ">=3.0.9"
+ujson = ">=5.9.0"
+beautifulsoup4 = "^4.12.3"
 
 [tool.poetry.scripts]
 run_pipeline = "scripts.run_chase_pipeline:main"
+run_generate_queries = "scripts.generate_synth_queries:main"
 
 [build-system]
 requires = ["poetry-core"]
