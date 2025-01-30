@@ -3,3 +3,4 @@ data/dev_databases
 .env
 poetry.lock
 scripts/clicker.py
+torch-1.12.1+cu113-cp39-cp39-win_amd64.whl

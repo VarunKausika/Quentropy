@@ -1,0 +1,1 @@
+,question_id,ground_truth,difficulty,database_name,question,hint,information_retrieval_values,DAC_candidates,QP_candidates,Synth_candidates,Intermediate_queries_and_results_during_fix,Query entropies during fix,Probability of bucket of correct query,Method-cluster-distribution,Best_candidate,Best_execution_result,Scores_dictionary,Latency(s)

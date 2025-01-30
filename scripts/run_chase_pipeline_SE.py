@@ -5,8 +5,8 @@ from datetime import datetime
 from collections import defaultdict
 import pandas as pd
 from openai import OpenAI
-import httpx
-from time import time
+import time
+from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from tqdm import tqdm
 import sqlite3
 import nltk
@@ -36,12 +36,9 @@ def info_retrieval(
     fewshot_examples: list[str],
     lsh_data_path: str,
     model: str,
-    embed_model: str,
-    http_client: httpx.Client, 
 ):
     client = OpenAI(
         base_url=os.environ['BASE_URL_MIXTRAL'],
-        http_client=http_client,
         api_key=os.environ['API_KEY_MIXTRAL']
     )
 
@@ -79,10 +76,9 @@ def info_retrieval(
     for similar_value in similar_values:
         for k, values in similar_value.items():
             all_values.extend(values.values())
-
+    
     all_values = [item for sublist in all_values for item in sublist]
     all_values = list(set(all_values))
-
     embed_obj = Embedding() # Need to change this function
 
     semantic_values = []
@@ -132,16 +128,14 @@ def candidate_generation(
     hint: str,
     model: str,
     temperature_values: list[float],
-    n_schema_shuffles: int,
-    http_client: httpx.Client      
+    n_schema_shuffles: int,   
 ):
     client = OpenAI(
         base_url=os.environ['BASE_URL_MIXTRAL'],
-        http_client=http_client,
         api_key=os.environ['API_KEY_MIXTRAL']
     )
 
-    all_candidates = []
+    all_candidates = {}
     log_values = defaultdict(list)
 
     for temperature in temperature_values:
@@ -189,19 +183,39 @@ def candidate_generation(
             parsed_dac = parse_sql_cand(dac_answer)
             parsed_qp = parse_sql_cand(qp_answer)
             parsed_synth = parse_sql_cand(synth_answer)
-            all_candidates+=[parsed_dac, parsed_qp, parsed_synth]
+            all_candidates[parsed_dac] = 'DAC'
+            all_candidates[parsed_qp] = 'QP'
+            all_candidates[parsed_synth] = 'SYNTH'
 
     return all_candidates, log_values
 
+def fetch_results_with_timeout(database_path, query):
+    """Function to fetch results with a timeout."""
+    # Create a new connection and cursor in each thread
+    conn = sqlite3.connect(database_path)
+    cursor = conn.cursor()
+    cursor.execute(query)
+    
+    # Extract column names only if it's a SELECT query
+    if cursor.description is not None:
+        columns = [description[0] for description in cursor.description]
+    else:
+        columns = []  # No columns for non-SELECT queries
+    
+    result = cursor.fetchall()
+    conn.close()  # Close the connection after fetching results
+    return columns, result
+        
 def query_fix(
     database_name: str,
     database_root_path: str,
     database_path: str,
-    candidates: list[str],
+    candidates: dict[str, str],
     model: str,
     ir: list[str],
     question: str,
     hint: str,
+    ground_truth: str,
     markup_processor: AutoProcessor,
     markup_model: MarkupLMModel,
     n_retries: int=10,
@@ -219,32 +233,64 @@ def query_fix(
             'TEMPERATURE': 0,
             'MAX_NEW_TOKENS': 2048 
         }
-    ) # Need to change this function
+    )
+
+    methods = []
+    candidates_tmp = []
+    for k, v in candidates.items():
+        methods.append(v)
+        candidates_tmp.append(k)
+    
+    candidates = candidates_tmp
 
     fixed_flags = defaultdict(bool)
     fixed_queries = []
-    qents= []
+    qents = []
+    method_percents = []
     all_qr = {}
     attempts = 0
+
     while attempts < n_retries:
+        correct_index = False
         new_candidates = []
         intermediate_qr = []
+
         for i, query in enumerate(candidates):
             try:
                 if fixed_flags[i] == 1:
                     new_candidates.append(query)
-                    conn = sqlite3.connect(database_path)
-                    cursor = conn.cursor()
-                    cursor.execute(query)
-                    result = cursor.fetchall()
+
+                    # Use ThreadPoolExecutor to apply timeout for fetchall
+                    with ThreadPoolExecutor() as executor:
+                        future = executor.submit(fetch_results_with_timeout, database_path, query)
+                        try:
+                            result, columns = future.result(timeout=15)  # Timeout in seconds
+
+                        except TimeoutError:
+                            print(f"Query {i} timed out.")
+                            result = []  
+                            columns = []
+
                     intermediate_qr.append((query, result))
                     continue
                 else:
                     conn = sqlite3.connect(database_path)
                     cursor = conn.cursor()
-                    cursor.execute(query)
-                    result = cursor.fetchall()
+
+                    # Use ThreadPoolExecutor to apply timeout for fetchall
+                    with ThreadPoolExecutor() as executor:
+                        future = executor.submit(fetch_results_with_timeout, database_path, query)
+                        try:
+                            result, columns = future.result(timeout=5)  # Timeout in seconds
+                        except TimeoutError:
+                            print(f"Query {i} timed out.")
+                            result = []
+                            columns = []
+                    
                     print(f"query {i}, result {result}")
+                    correct_flag = check_exec_accuracy(database_path=database_path, query=query, ground_truth_query=ground_truth)
+                    if correct_flag:
+                        correct_index = i
                     conn.close()
                     fixed_queries.append((query, result))
                     intermediate_qr.append((query, result))
@@ -255,40 +301,43 @@ def query_fix(
                 fixed_flags[i] = 0
                 query = query_fixer(
                     database_name=database_name,
-                    database_root_path = database_root_path,
-                    ir = ir,
-                    query_to_correct = query,
-                    question = question,
-                    hint = hint,
-                    result = e,
-                    model = llm
+                    database_root_path=database_root_path,
+                    ir=ir,
+                    query_to_correct=query,
+                    question=question,
+                    hint=hint,
+                    result=e,
+                    model=llm
                 )
                 query = parse_query_fix_output(query)
                 new_candidates.append(query)
                 intermediate_qr.append((query, e))
-        
+
         all_qr[attempts] = intermediate_qr
         all_features = []
+        
         for cand in new_candidates:
             try:
-                # Connect to the SQLite database
-                conn = sqlite3.connect(database_path)
-                cursor = conn.cursor()
-                
-                # Execute the query
-                cursor.execute(cand)
-                
-                # Fetch all results
-                results = cursor.fetchall()
-                columns = [description[0] for description in cursor.description]
+                # Use ThreadPoolExecutor to apply timeout for fetchall
+                with ThreadPoolExecutor() as executor:
+                    future = executor.submit(fetch_results_with_timeout, database_path, cand)
+                    try:
+                        results, columns = future.result(timeout=10)  # Timeout in seconds
+                    except TimeoutError:
+                        print(f"Query for candidate {cand} timed out.")
+                        results = [] 
+                        columns = []
+
                 html_result = sql_result_to_html(column_names=columns, result=results)
                 features = html_to_features(
                     html_string=html_result, 
                     markup_lm_processor=markup_processor, 
                     markup_lm_model=markup_model,
                 )
-                all_features.append(features.detach().squeeze(dim=0))
                 
+                all_features.append(features.detach().squeeze(dim=0))
+
+            
             except sqlite3.Error as e:
                 print(f"An error occurred: {e}")
                 html_result = sql_result_to_html(error=e)
@@ -298,14 +347,24 @@ def query_fix(
                     markup_lm_model=markup_model,
                 )
                 all_features.append(features.detach().squeeze(dim=0))
-            
-            print('shape', np.array(all_features).shape)
-        clusters_DB = cluster_sql_queries(embeddings=np.array(all_features))
-        qents.append(calculate_semantic_entropy(clusters=clusters_DB))
-        attempts+=1
+        
+        pi_correct = False
+        if correct_index:
+            clusters_DB, pi_correct = cluster_sql_queries(embeddings=np.array(all_features), correct_ind=correct_index)
+        else:
+            clusters_DB = cluster_sql_queries(embeddings=np.array(all_features))
+        
+        entropy, cluster_percentages = calculate_semantic_entropy(clusters=clusters_DB, methods=methods)
+        qents.append(entropy)
+        method_percents.append(cluster_percentages)
+        attempts += 1
 
     log_values = {"INTERMEDIATE_QR": all_qr} 
-    return fixed_queries, qents, log_values
+    if pi_correct:
+        return fixed_queries, qents, log_values, pi_correct, method_percents
+    else:
+        return fixed_queries, qents, log_values, None, method_percents
+
 
 def select_best_candidate(
     fixed_queries: list[tuple[str, list[tuple[str]]]],
@@ -315,11 +374,9 @@ def select_best_candidate(
     question: str,
     hint: str,
     model: str,
-    http_client: httpx.Client
 ):
     client = OpenAI(
         base_url=os.environ['BASE_URL_DEEPSEEK'],
-        http_client=http_client,
         api_key=os.environ['API_KEY_DEEPSEEK']
         )
 
@@ -382,7 +439,6 @@ def select_best_candidate(
         return None, None, None
     
 def main():
-    http_client = httpx.Client(verify=False)
     dev_file = 'data/sub_sampled_bird_dev_set.json'
 
     markup_processor = AutoProcessor.from_pretrained("microsoft/markuplm-base")
@@ -403,9 +459,10 @@ def main():
             'DAC_candidates',
             'QP_candidates',
             'Synth_candidates',
-            'Attempts_taken_to_fix',
             'Intermediate_queries_and_results_during_fix',
             'Query entropies during fix',
+            'Probability of bucket of correct query',
+            'Method-cluster-distribution',
             'Best_candidate',
             'Best_execution_result',
             'Scores_dictionary',
@@ -414,8 +471,8 @@ def main():
     )
 
     log_count = 0
-    for question in tqdm(dev_set[32:], desc='Processing questions...'):
-        start = time()
+    for question in tqdm(dev_set[66:], desc='Processing questions...'):
+        start = time.time()
         try:
             print('Starting info retrieval')
             ir = info_retrieval(
@@ -424,8 +481,7 @@ def main():
                 fewshot_examples=KEYWORD_FEWSHOT_EXAMPLES,
                 lsh_data_path=f'{os.environ["DATABASE_ROOT_PATH"]}/{question["db_id"]}',
                 model='tgi',
-                embed_model='gte-large',
-                http_client=http_client
+
             )
 
             print("Starting candidate generation \n")
@@ -438,20 +494,19 @@ def main():
                 model='tgi',
                 temperature_values=[0, 0.2, 0.5, 1.5],
                 n_schema_shuffles=1,
-                http_client=http_client
             )
 
             print('Starting query fix \n')
-            fixed_queries, qents, logs_qf = query_fix(
+            fixed_queries, qents, logs_qf, pi_correct, method_percents = query_fix(
                 database_name=question['db_id'],
                 database_root_path=f'{os.environ["DATABASE_ROOT_PATH"]}/{question["db_id"]}',
                 database_path=f'{os.environ["DATABASE_ROOT_PATH"]}/{question["db_id"]}/{question["db_id"]}.sqlite',
                 candidates=candidates,
                 model='tgi',
-                http_client=http_client,
                 ir=ir,
                 question=question['question'],
                 hint=question['evidence'],
+                ground_truth=question['SQL'],
                 markup_model=markup_model,
                 markup_processor=markup_processor,
                 n_retries=8
@@ -466,11 +521,11 @@ def main():
                 question=question['question'],
                 hint=question['evidence'],
                 model='tgi',
-                http_client=http_client
             )
 
-            latency = time() - start
+            latency = time.time() - start
 
+            print('LOG LENGTH', len(logs))
             logs.loc[len(logs)] = [
                 question['question_id'],
                 question['SQL'],
@@ -482,9 +537,10 @@ def main():
                 log_cg['DAC_CANDIDATES'],
                 log_cg['QP_CANDIDATES'],
                 log_cg['SYNTH_CANDIDATES'],
-                logs_qf['ATTEMPTS'],
                 logs_qf['INTERMEDIATE_QR'],
                 qents,
+                pi_correct,
+                method_percents,
                 best_query,
                 best_result,
                 logs_sa,
@@ -493,12 +549,15 @@ def main():
 
         except Exception as e:
             print(f'Exception {e} occurred, skipping')
+            time.sleep(10)
+
 
         # Checkpointing
-        if len(logs)%4 == 0:
+        if len(logs)%1 == 0:
             date = '_'.join(str(datetime.now()).split()).replace('.', '_').replace(':', '-') + f'_run_{log_count+1}'
             logs.to_csv(f"{os.environ['LOGS_SAVE_PATH']}/{date}.csv")
             log_count+=1
+            time.sleep(10)
             
     date = '_'.join(str(datetime.now()).split()).replace('.', '_').replace(':', '-') + f'_run_{log_count+1}'
     logs.to_csv(f"{os.environ['LOGS_SAVE_PATH']}/{date}.csv")

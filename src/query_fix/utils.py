@@ -7,6 +7,9 @@ from src.cand_gen.utils import get_schema
 from .prompts import *
 from src.model.inference_endpoints import LLM
 import sqlite3
+from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, TimeoutError
+import torch
 
 def query_fixer(
     database_name: str,
@@ -118,17 +121,32 @@ def sql_result_to_html(
 def html_to_features(
     html_string: str,
     markup_lm_processor: AutoProcessor,
-    markup_lm_model: MarkupLMModel
+    markup_lm_model: MarkupLMModel,
+    timeout: int = 30  # Timeout in seconds
 ):
-    # Have to compromise with truncation, max context length of markup lm is 512
-    encoding = markup_lm_processor(html_string, return_tensors="pt", truncation=True)
+    try:
+        # Define the model inference in a separate thread
+        def run_model():
+            encoding = markup_lm_processor(html_string, return_tensors="pt", truncation=True)
+            outputs = markup_lm_model(**encoding)
+            return outputs.last_hidden_state.mean(dim=1)
 
-    outputs = markup_lm_model(**encoding)
-    last_hidden_states = outputs.last_hidden_state.mean(dim=1)
-    return last_hidden_states
+        # Run the model with a timeout
+        with ThreadPoolExecutor() as executor:
+            future = executor.submit(run_model)
+            last_hidden_states = future.result(timeout=timeout)  # Enforce timeout
+            return last_hidden_states
+
+    except TimeoutError:
+        print("Model inference timed out, returning random tensor")
+        return torch.rand(1, markup_lm_model.config.hidden_size)
+    
+    except Exception as e:
+        print(f"An error occurred during markup processing: {e}, returning random tensor")
+        return torch.rand(1, markup_lm_model.config.hidden_size)
 
 # clustering all_features
-def cluster_sql_queries(embeddings: np.ndarray, correct_ind: int):
+def cluster_sql_queries(embeddings: np.ndarray, correct_ind: int=None):
     """
     Cluster SQL query embeddings using DBSCAN.
     correct index: tracking variable to track where the correct query ends up
@@ -140,12 +158,15 @@ def cluster_sql_queries(embeddings: np.ndarray, correct_ind: int):
     # Apply DBSCAN
     dbscan = DBSCAN(eps=0.5, min_samples=1)  # You may need to tune these parameters
     clusters = dbscan.fit_predict(normalized_embeddings)
-    correct_query_cluster = clusters[correct_ind] 
-    pi_cluster = sum([1 if i == correct_query_cluster else 0 for i in clusters])
-    
-    return clusters.tolist()
+    if correct_ind:
+        correct_query_cluster = clusters[correct_ind] 
+        pi_correct_cluster = sum([1 if i == correct_query_cluster else 0 for i in clusters])/len(clusters)
+        
+        return clusters.tolist(), pi_correct_cluster
+    else:
+        return clusters.tolist()
 
-def calculate_semantic_entropy(clusters: list[int]) -> float:
+def calculate_semantic_entropy(clusters: list[int], methods: list[str]) -> float:
     """
     Calculate the semantic entropy of the clusters using the formula: 
     -Sigma(Pi * log(Pi)), where Pi is the number of candidates in cluster i divided by all candidates.
@@ -155,5 +176,18 @@ def calculate_semantic_entropy(clusters: list[int]) -> float:
     for cluster_id, count in cluster_counts.items():
         Pi = count / len(clusters)
         entropy -= Pi * np.log2(Pi)
+
+    cluster_method_counts = defaultdict(lambda: defaultdict(int))
+
+    # Populate the method counts for each cluster
+    for cluster, method in zip(clusters, methods):
+        cluster_method_counts[cluster][method] += 1
+
+    cluster_percentages = {}
+    for cluster, method_counts in cluster_method_counts.items():
+        total_count = sum(method_counts.values())
+        cluster_percentages[cluster] = {
+            method: (count / total_count) for method, count in method_counts.items()
+        }
     
-    return entropy
+    return entropy, cluster_percentages
