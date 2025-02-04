@@ -41,7 +41,7 @@ def query_fixer(
         response_type='single',
         prompts = prompt
     ).result
-
+    completion = completion.split('</think>')[1].strip()
     return completion
 
 def parse_query_fix_output(

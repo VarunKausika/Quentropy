@@ -4,7 +4,6 @@ from dotenv import load_dotenv
 from datetime import datetime
 from collections import defaultdict
 import pandas as pd
-from openai import OpenAI
 import httpx
 from time import time
 from tqdm import tqdm
@@ -36,21 +35,15 @@ def info_retrieval(
     fewshot_examples: list[str],
     lsh_data_path: str,
     model: str,
-    embed_model: str,
-    http_client: httpx.Client, 
+    embed_model: str, 
 ):
-    client = OpenAI(
-        base_url=os.environ['BASE_URL_MIXTRAL'],
-        http_client=http_client,
-        api_key=os.environ['API_KEY_MIXTRAL']
-    )
 
     llm = LLM(
-        client = client,
         model = model, 
         gen_params = {
             'STREAM': False,
-            'TEMPERATURE': 0
+            'TEMPERATURE': 0,
+            'MAX_NEW_TOKENS': 512
         }
     ) # Need to change this function
 
@@ -132,21 +125,14 @@ def candidate_generation(
     hint: str,
     model: str,
     temperature_values: list[float],
-    n_schema_shuffles: int,
-    http_client: httpx.Client      
+    n_schema_shuffles: int,     
 ):
-    client = OpenAI(
-        base_url=os.environ['BASE_URL_MIXTRAL'],
-        http_client=http_client,
-        api_key=os.environ['API_KEY_MIXTRAL']
-    )
 
     all_candidates = []
     log_values = defaultdict(list)
 
     for temperature in temperature_values:
         llm = LLM(
-            client=client,
             model = model,
             gen_params = {
                 'STREAM': False,
@@ -199,21 +185,13 @@ def query_fix(
     database_path: str,
     candidates: list[str],
     model: str,
-    http_client: httpx.Client,
     ir: list[str],
     question: str,
     hint: str,
     n_retries: int = 10
 ):
 
-    client = OpenAI(
-        base_url=os.environ['BASE_URL_DEEPSEEK'],
-        http_client=http_client,
-        api_key=os.environ['API_KEY_DEEPSEEK']
-    )
-
     llm = LLM(
-        client=client,
         model = model,
         gen_params = {
             'STREAM': False,
@@ -267,16 +245,9 @@ def select_best_candidate(
     question: str,
     hint: str,
     model: str,
-    http_client: httpx.Client
 ):
-    client = OpenAI(
-        base_url=os.environ['BASE_URL_DEEPSEEK'],
-        http_client=http_client,
-        api_key=os.environ['API_KEY_DEEPSEEK']
-        )
 
     llm = LLM(
-        client = client,
         model = model, 
         gen_params = {
             'STREAM': False,
@@ -334,8 +305,7 @@ def select_best_candidate(
         return None, None, None
     
 def main():
-    http_client = httpx.Client(verify=False)
-    dev_file = 'data/sub_sampled_bird_dev_set.json'
+    dev_file = 'data/subsampled_50.json'
 
     with open(dev_file, 'r') as file:
         dev_set = json.load(file)
@@ -371,9 +341,8 @@ def main():
                 hint=question['evidence'],
                 fewshot_examples=KEYWORD_FEWSHOT_EXAMPLES,
                 lsh_data_path=f'{os.environ["DATABASE_ROOT_PATH"]}/{question["db_id"]}',
-                model='tgi',
+                model='deepseek-ai/DeepSeek-R1-Distill-Qwen-32B',
                 embed_model='gte-large',
-                http_client=http_client
             )
 
             print("Starting candidate generation \n")
@@ -383,10 +352,9 @@ def main():
                 ir=ir,
                 question=question['question'],
                 hint=question['evidence'],
-                model='tgi',
+                model='deepseek-ai/DeepSeek-R1-Distill-Qwen-32B',
                 temperature_values=[0, 0.2, 0.5],
                 n_schema_shuffles=1,
-                http_client=http_client
             )
 
             print('Starting query fix \n')
@@ -395,8 +363,7 @@ def main():
                 database_root_path=f'{os.environ["DATABASE_ROOT_PATH"]}/{question["db_id"]}',
                 database_path=f'{os.environ["DATABASE_ROOT_PATH"]}/{question["db_id"]}/{question["db_id"]}.sqlite',
                 candidates=candidates,
-                model='tgi',
-                http_client=http_client,
+                model='deepseek-ai/DeepSeek-R1-Distill-Qwen-32B',
                 ir=ir,
                 question=question['question'],
                 hint=question['evidence'],
@@ -410,9 +377,7 @@ def main():
                 database_name=question['db_id'],
                 database_path=f'{os.environ["DATABASE_ROOT_PATH"]}/{question["db_id"]}',
                 question=question['question'],
-                hint=question['evidence'],
-                model='tgi',
-                http_client=http_client
+                hint=question['evidence']
             )
 
             latency = time() - start

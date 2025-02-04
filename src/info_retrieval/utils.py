@@ -27,6 +27,7 @@ def extract_keyword(
     # Remove multiple newlines
     completion = re.sub(r'\n+', '\n', completion)
     completion = re.sub(r'“|”', '"', completion).replace("‘", "'").replace("’", "'").replace("*", "")
+    completion = completion.split('</think>')[1].strip()
     return ast.literal_eval(completion)
 
 def semantic_rerank(

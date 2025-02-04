@@ -32,5 +32,5 @@ def select_agent(
         response_type = 'single',
         prompts = prompt
     ).result
-
+    completion = completion.split('</think>')[1].strip()
     return completion

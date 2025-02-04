@@ -111,6 +111,7 @@ DATABASE_INFO:
         prompts = prompt
     ).result
 
+    completion = completion.split('</think>')[1].strip()
     return completion
 
 def query_plan_cot(
@@ -133,6 +134,7 @@ def query_plan_cot(
         prompts = FINAL_PROMPT
     ).result
 
+    completion = completion.split('</think>')[1].strip()
     return completion
 
 def synthetic_examples_gen(
@@ -215,6 +217,7 @@ def run_synth_gen_pipeline(
         prompts = prompt
     ).result
 
+    completion = completion.split('</think>')[1].strip()
     return completion
 
 def construct_prompt(

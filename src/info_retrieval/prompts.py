@@ -35,9 +35,9 @@ keyphrases, and named entities.
 Question: {question}
 Hint: {hint}
 Please capture the essence of both the question and hint through the identified terms and phrases.
-Only output the Python List, no explanations needed.
+Only output the Python List, no explanations needed. Do not include reasoning in the final answer. Just output the list.
 Please strictly follow only the below provided answer format
 ANSWER FORMAT:
 ['keyword_1', 'keyword_2', 'keyword_3', ...]
-ANSWER: 
+ANSWER:
 """
