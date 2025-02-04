@@ -1,7 +1,7 @@
 # from openai import OpenAI
 # import requests
 # from typing import Callable, Optional
-# from .response_utils import *
+from .response_utils import *
 # from tqdm import tqdm
 # import os
 # import joblib
@@ -327,6 +327,6 @@ class LLM:
                 for _ in tqdm(range(max_n_refines), desc='Refining response...'):
                     message_queue = self.LLM_turn(message_queue, new_prompt=refine_continue_prompt)
                     answer = message_queue[-1]['content']
-                return {'result': answer, 'message_queue': message_queue}
+                return LLMRefineResult(result=answer, message_queue=message_queue)
             
-            return {'result': answer, 'message_queue': message_queue}
+            return LLMSingleResult(result=answer, message_queue=message_queue)
